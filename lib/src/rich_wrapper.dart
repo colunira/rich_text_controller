@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import 'controller.dart';
 import 'models/match_target_item.model.dart';
 
@@ -35,6 +36,10 @@ class RichWrapper extends StatefulWidget {
   /// A callback function triggered when matches are found.
   /// The callback provides a list of matched strings.
   final Function(List<String> match)? onMatch;
+
+  /// A callback function triggered when matches are found.
+  /// The callback provides a list of matched objects Match.
+  final Function(List<Match> match)? onMatchObject;
 
   /// A callback function triggered with the indices of matches.
   /// The callback provides a list of maps, where each map contains the matched string
@@ -76,6 +81,7 @@ class RichWrapper extends StatefulWidget {
     this.initialText,
     required this.targetMatches,
     this.onMatch,
+    this.onMatchObject,
     this.onMatchIndex,
     this.deleteOnBack = false,
     this.regExpDotAll = false,
@@ -102,8 +108,9 @@ class _RichWrapperState extends State<RichWrapper> {
     _controller = RichTextController(
       text: widget.initialText ?? '',
       targetMatches: widget.targetMatches,
-      onMatch: widget.onMatch ?? (_) {},
-      onMatchIndex: widget.onMatchIndex ?? (_) {},
+      onMatch: widget.onMatch,
+      onMatchObject: widget.onMatchObject,
+      onMatchIndex: widget.onMatchIndex,
       regExpDotAll: widget.regExpDotAll,
       regExpMultiLine: widget.regExpMultiLine,
       regExpUnicode: widget.regExpUnicode,

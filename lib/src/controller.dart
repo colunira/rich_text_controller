@@ -10,13 +10,13 @@ import 'models/match_target_item.model.dart';
 /// for matched text.
 class RichTextController extends TextEditingController {
   final List<MatchTargetItem> targetMatches;
-  final Function(List<String> match) onMatch;
+  final Function(List<String> match)? onMatch;
+  final Function(List<Match> match)? onMatchObject;
   final Function(List<Map<String, List<int>>>)? onMatchIndex;
 
   String _lastValue = "";
-  Match? _matchUnderCursor; // Cache the match under the cursor
-  MatchTargetItem?
-      _matchedItemUnderCursor; // Cache the matched item under the cursor
+  Match? matchUnderCursor; // Cache the match under the cursor
+  MatchTargetItem? _matchedItemUnderCursor; // Cache the matched item under the cursor
 
   /// Controls the dotAll property of the full combined [RegExp] of the match targets in the controller.
   bool regExpDotAll;
@@ -45,7 +45,8 @@ class RichTextController extends TextEditingController {
   RichTextController({
     super.text,
     required this.targetMatches,
-    required this.onMatch,
+    this.onMatch,
+    this.onMatchObject,
     this.onMatchIndex,
     this.regExpDotAll = false,
     this.regExpMultiLine = false,
@@ -110,29 +111,23 @@ class RichTextController extends TextEditingController {
     final allRegex = _getCombinedRegex(targetMatches);
 
     // Find all matches
-    final allMatches = allRegex.allMatches(text);
+    final allMatches = allRegex.allMatches(text).toList(growable: false);
 
     // Handle IME composing region
-    if (withComposing &&
-        value.composing.isValid &&
-        !value.composing.isCollapsed) {
+    if (withComposing && value.composing.isValid && !value.composing.isCollapsed) {
       return _handleComposingText(style, allMatches, matches, matchIndex);
     }
 
     // Process matches if no IME composition is active
-    children
-        .addAll(_processText(text, style, allMatches, matches, matchIndex, 0));
+    children.addAll(_processText(text, style, allMatches, matches, matchIndex, 0));
 
     // Handle backspace deletion if enabled
-    if (isBack(text, _lastValue) &&
-        _matchUnderCursor != null &&
-        _matchedItemUnderCursor != null &&
-        _matchedItemUnderCursor!.deleteOnBack) {
+    if (isBack(text, _lastValue) && matchUnderCursor != null && _matchedItemUnderCursor != null && _matchedItemUnderCursor!.deleteOnBack) {
       _handleBackspaceDelete();
     }
 
     // Trigger callbacks
-    _triggerCallbacks(matches, matchIndex);
+    _triggerCallbacks(matches, allMatches, matchIndex);
 
     _lastValue = text;
     return TextSpan(style: style, children: children);
@@ -157,8 +152,7 @@ class RichTextController extends TextEditingController {
     // Add text before the composing region
     if (composingStart > 0) {
       final nonComposingText = text.substring(0, composingStart);
-      children.addAll(_processText(
-          nonComposingText, style, allMatches, matches, matchIndex, 0));
+      children.addAll(_processText(nonComposingText, style, allMatches, matches, matchIndex, 0));
     }
 
     // Add the composing text with the appropriate style
@@ -167,16 +161,13 @@ class RichTextController extends TextEditingController {
 
     children.add(TextSpan(
       text: composingText,
-      style: matchedItem.style.copyWith(
-          decoration:
-              TextDecoration.underline), // Apply underline to composing text
+      style: matchedItem.style.copyWith(decoration: TextDecoration.underline), // Apply underline to composing text
     ));
 
     // Add text after the composing region
     if (composingEnd < text.length) {
       final remainingText = text.substring(composingEnd);
-      children.addAll(_processText(
-          remainingText, style, allMatches, matches, matchIndex, composingEnd));
+      children.addAll(_processText(remainingText, style, allMatches, matches, matchIndex, composingEnd));
     }
 
     return TextSpan(style: style, children: children);
@@ -209,8 +200,7 @@ class RichTextController extends TextEditingController {
 
       // Add text before this match
       if (matchStart > lastMatchEnd - startOffset) {
-        final nonMatchText =
-            text.substring(lastMatchEnd - startOffset, matchStart);
+        final nonMatchText = text.substring(lastMatchEnd - startOffset, matchStart);
         children.add(TextSpan(text: nonMatchText, style: style));
       }
 
@@ -259,9 +249,7 @@ class RichTextController extends TextEditingController {
     return TextSpan(
       text: text,
       style: matchedItem.style,
-      recognizer: matchedItem.onTap != null
-          ? (TapGestureRecognizer()..onTap = () => matchedItem.onTap!(text))
-          : null,
+      recognizer: matchedItem.onTap != null ? (TapGestureRecognizer()..onTap = () => matchedItem.onTap!(text)) : null,
     );
   }
 
@@ -270,9 +258,8 @@ class RichTextController extends TextEditingController {
   /// - [match]: The regex match.
   /// - [matchedItem]: The [MatchTargetItem] associated with the match.
   void _cacheMatchUnderCursor(Match match, MatchTargetItem matchedItem) {
-    if (selection.baseOffset >= match.start &&
-        selection.baseOffset <= match.end) {
-      _matchUnderCursor = match;
+    if (selection.baseOffset >= match.start && selection.baseOffset <= match.end) {
+      matchUnderCursor = match;
       _matchedItemUnderCursor = matchedItem;
     }
   }
@@ -282,8 +269,7 @@ class RichTextController extends TextEditingController {
   /// - [matchText]: The matched text.
   /// - [match]: The regex match.
   /// - [matchIndex]: The list to store match indices.
-  void _addMatchIndex(
-      String matchText, Match match, List<Map<String, List<int>>> matchIndex) {
+  void _addMatchIndex(String matchText, Match match, List<Map<String, List<int>>> matchIndex) {
     if (onMatchIndex != null) {
       matchIndex.add({
         matchText: [match.start, match.end]
@@ -293,18 +279,15 @@ class RichTextController extends TextEditingController {
 
   /// Handles backspace deletion of the match under the cursor.
   void _handleBackspaceDelete() {
-    if (_matchUnderCursor != null &&
-        selection.baseOffset == _matchUnderCursor!.end - 1) {
+    if (matchUnderCursor != null && selection.baseOffset == matchUnderCursor!.end - 1) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        final newText = text.replaceRange(
-            _matchUnderCursor!.start, _matchUnderCursor!.end - 1, "");
+        final newText = text.replaceRange(matchUnderCursor!.start, matchUnderCursor!.end - 1, "");
         value = TextEditingValue(
           text: newText,
-          selection: TextSelection.collapsed(offset: _matchUnderCursor!.start),
+          selection: TextSelection.collapsed(offset: matchUnderCursor!.start),
         );
-        _matchUnderCursor = null; // Reset the cached match after deletion
-        _matchedItemUnderCursor =
-            null; // Reset the cached matched item after deletion
+        matchUnderCursor = null; // Reset the cached match after deletion
+        _matchedItemUnderCursor = null; // Reset the cached matched item after deletion
       });
     }
   }
@@ -313,13 +296,11 @@ class RichTextController extends TextEditingController {
   ///
   /// - [matches]: The set of matched text.
   /// - [matchIndex]: The list of match indices.
-  void _triggerCallbacks(
-      Set<String> matches, List<Map<String, List<int>>> matchIndex) {
+  void _triggerCallbacks(Set<String> matches, List<RegExpMatch> allMatches, List<Map<String, List<int>>> matchIndex) {
     if (matches.isNotEmpty) {
-      onMatch(List<String>.unmodifiable(matches));
-      if (onMatchIndex != null) {
-        onMatchIndex!(matchIndex);
-      }
+      onMatch?.call(List<String>.unmodifiable(matches));
+      onMatchObject?.call(allMatches);
+      onMatchIndex?.call(matchIndex);
     }
   }
 
@@ -327,9 +308,7 @@ class RichTextController extends TextEditingController {
   ///
   /// - [targetMatches]: The list of [MatchTargetItem] objects.
   RegExp _getCombinedRegex(List<MatchTargetItem> targetMatches) {
-    if (_cachedRegex != null &&
-        _cachedTargetMatches != null &&
-        _listEquals(_cachedTargetMatches!, targetMatches)) {
+    if (_cachedRegex != null && _cachedTargetMatches != null && _listEquals(_cachedTargetMatches!, targetMatches)) {
       return _cachedRegex!;
     }
 
@@ -344,9 +323,7 @@ class RichTextController extends TextEditingController {
         // or if the pattern already contains \B (non-word boundary).
         // Otherwise, wrap it with \b (word boundary).
         final pattern =
-            target.allowInlineMatching || target.regex!.pattern.contains(r'\B')
-                ? target.regex!.pattern
-                : '\\b${target.regex!.pattern}\\b';
+            target.allowInlineMatching || target.regex!.pattern.contains(r'\B') ? target.regex!.pattern : '\\b${target.regex!.pattern}\\b';
         buffer.write('($pattern)');
       } else if (target.text != null) {
         // For plain text, escape it and handle special cases like !del
