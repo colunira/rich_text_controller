@@ -113,6 +113,11 @@ class RichTextController extends TextEditingController {
     // Find all matches
     final allMatches = allRegex.allMatches(text).toList(growable: false);
 
+    if (allMatches.isEmpty) {
+      _matchedItemUnderCursor = null;
+      matchUnderCursor = null;
+    }
+
     // Handle IME composing region
     if (withComposing && value.composing.isValid && !value.composing.isCollapsed) {
       return _handleComposingText(style, allMatches, matches, matchIndex);
@@ -122,8 +127,8 @@ class RichTextController extends TextEditingController {
     children.addAll(_processText(text, style, allMatches, matches, matchIndex, 0));
 
     // Handle backspace deletion if enabled
-    if (isBack(text, _lastValue) && matchUnderCursor != null && _matchedItemUnderCursor != null && _matchedItemUnderCursor!.deleteOnBack) {
-      _handleBackspaceDelete();
+    if (isBack(text, _lastValue) && matchUnderCursor != null && _matchedItemUnderCursor != null) {
+      _handleBackspaceDelete(_matchedItemUnderCursor!.deleteOnBack);
     }
 
     // Trigger callbacks
@@ -261,6 +266,9 @@ class RichTextController extends TextEditingController {
     if (selection.baseOffset >= match.start && selection.baseOffset <= match.end) {
       matchUnderCursor = match;
       _matchedItemUnderCursor = matchedItem;
+    } else {
+      matchUnderCursor = null;
+      _matchedItemUnderCursor = null;
     }
   }
 
@@ -278,14 +286,16 @@ class RichTextController extends TextEditingController {
   }
 
   /// Handles backspace deletion of the match under the cursor.
-  void _handleBackspaceDelete() {
+  void _handleBackspaceDelete(bool deleteOnBack) {
     if (matchUnderCursor != null && selection.baseOffset == matchUnderCursor!.end - 1) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final newText = text.replaceRange(matchUnderCursor!.start, matchUnderCursor!.end - 1, "");
-        value = TextEditingValue(
-          text: newText,
-          selection: TextSelection.collapsed(offset: matchUnderCursor!.start),
-        );
+        if (deleteOnBack) {
+          value = TextEditingValue(
+            text: newText,
+            selection: TextSelection.collapsed(offset: matchUnderCursor!.start),
+          );
+        }
         matchUnderCursor = null; // Reset the cached match after deletion
         _matchedItemUnderCursor = null; // Reset the cached matched item after deletion
       });
